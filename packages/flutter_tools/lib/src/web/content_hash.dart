@@ -60,6 +60,23 @@ class WebAssetHashResult {
 String computeShortContentHash(List<int> bytes) =>
     crypto.sha256.convert(bytes).toString().substring(0, 8);
 
+/// Returns the build-relative path for a local renderer bundle's file bytes.
+String? computeCanvasKitContentBaseUrl(Directory directory) {
+  if (!directory.existsSync()) {
+    return null;
+  }
+  final FileSystem fileSystem = directory.fileSystem;
+  final List<File> files = directory.listSync(recursive: true).whereType<File>().toList()
+    ..sort((File a, File b) => a.path.compareTo(b.path));
+  final entries = <String, String>{
+    for (final file in files)
+      fileSystem.path.split(fileSystem.path.relative(file.path, from: directory.path)).join('/'):
+          crypto.sha256.convert(file.readAsBytesSync()).toString(),
+  };
+  final String hash = computeShortContentHash(utf8.encode(jsonEncode(entries)));
+  return 'canvaskit/$hash';
+}
+
 String computeHashedBasename(String oldBasename, String contentHash, FileSystem fileSystem) {
   final String doubleExt = fileSystem.path.extension(oldBasename, 2);
   final String ext = _kKnownHashedExtensions.contains(doubleExt)

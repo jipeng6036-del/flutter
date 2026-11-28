@@ -26,6 +26,7 @@ import '../plugins.dart';
 import '../project.dart';
 import '../version.dart';
 import 'compiler_config.dart';
+import 'content_hash.dart';
 import 'migrations/scrub_generated_plugin_registrant.dart';
 
 export 'compiler_config.dart';
@@ -38,6 +39,9 @@ const kBaseHref = 'baseHref';
 
 /// Static assets url to set in index.html in flutter build command
 const kStaticAssetsUrl = 'staticAssetsUrl';
+
+/// The content-hashed base URL for the build's self-hosted CanvasKit assets.
+const kLocalCanvasKitBaseUrl = 'localCanvasKitBaseUrl';
 
 /// Prefix for web-define variables stored in [Environment.defines].
 const kWebDefinePrefix = 'webDefine:';
@@ -105,6 +109,15 @@ class WebBuilder {
     final Status status = logger.startProgress('Compiling $target for the Web...');
     final sw = Stopwatch()..start();
     try {
+      final String? localCanvasKitBaseUrl =
+          buildInfo.useLocalCanvasKit &&
+              compilerConfigs.any((WebCompilerConfig config) => config.webContentHash)
+          ? computeCanvasKitContentBaseUrl(
+              fileSystem
+                  .directory(artifacts.getHostArtifact(HostArtifact.flutterWebSdk))
+                  .childDirectory('canvaskit'),
+            )
+          : null;
       final BuildResult result = await _buildSystem.build(
         _buildTargets.webServiceWorker(
           fileSystem,
@@ -124,6 +137,7 @@ class WebBuilder {
             kHasWebPlugins: hasWebPlugins.toString(),
             kBaseHref: ?baseHref,
             kStaticAssetsUrl: ?staticAssetsUrl,
+            kLocalCanvasKitBaseUrl: ?localCanvasKitBaseUrl,
             ...buildInfo.toBuildSystemEnvironment(),
             for (final MapEntry(:key, :value) in webDefines.entries) '$kWebDefinePrefix$key': value,
           },

@@ -1836,7 +1836,8 @@ _flutter.loader.load();
       ..createSync(recursive: true)
       ..writeAsStringSync('first renderer bytes');
     sdk.childFile('canvaskit.js').writeAsStringSync('loader');
-    final target = WebBuiltInAssets(fs, environment.artifacts, webContentHash: true);
+    environment.defines[kLocalCanvasKitBaseUrl] = computeCanvasKitContentBaseUrl(sdk)!;
+    final target = WebBuiltInAssets(fs, environment.artifacts);
     final templatedFiles = WebTemplatedFiles(
       const <Map<String, Object?>>[],
       compileTargets: <Dart2WebTarget>[
@@ -1882,14 +1883,18 @@ _flutter.loader.load();
       isTrue,
     );
 
-    wasm.writeAsStringSync('updated renderer bytes');
+    final DateTime originalModificationTime = wasm.lastModifiedSync();
+    wasm
+      ..writeAsStringSync('second renderer byte')
+      ..setLastModifiedSync(originalModificationTime);
+    environment.defines[kLocalCanvasKitBaseUrl] = computeCanvasKitContentBaseUrl(sdk)!;
     await target.build(environment);
     final File updatedOutput = target
         .resolveOutputs(environment)
         .sources
         .singleWhere((File file) => file.basename == 'canvaskit.wasm');
     expect(updatedOutput.path, isNot(output.path));
-    expect(updatedOutput.readAsStringSync(), 'updated renderer bytes');
+    expect(updatedOutput.readAsStringSync(), 'second renderer byte');
   });
 
   test('Dart2JSTarget getBuildConfig dynamically discovers hashed output', () {

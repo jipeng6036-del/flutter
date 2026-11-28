@@ -1450,30 +1450,6 @@ class WebReleaseBundle extends Target {
   }
 }
 
-Directory _canvasKitArtifactDirectory(Environment environment) => environment.fileSystem
-    .directory(environment.artifacts.getHostArtifact(HostArtifact.flutterWebSdk))
-    .childDirectory('canvaskit');
-
-String? _localCanvasKitBaseUrl(Environment environment, {required bool webContentHash}) {
-  if (!webContentHash || environment.defines[kUseLocalCanvasKitFlag] != 'true') {
-    return null;
-  }
-  final Directory directory = _canvasKitArtifactDirectory(environment);
-  if (!directory.existsSync()) {
-    return null;
-  }
-  final FileSystem fileSystem = environment.fileSystem;
-  final List<File> files = directory.listSync(recursive: true).whereType<File>().toList()
-    ..sort((File a, File b) => a.path.compareTo(b.path));
-  final entries = <String, String>{
-    for (final file in files)
-      fileSystem.path.split(fileSystem.path.relative(file.path, from: directory.path)).join('/'):
-          crypto.sha256.convert(file.readAsBytesSync()).toString(),
-  };
-  final String hash = computeShortContentHash(utf8.encode(jsonEncode(entries)));
-  return 'canvaskit/$hash';
-}
-
 class WebTemplatedFiles extends Target {
   WebTemplatedFiles(this.buildDescriptions, {this.compileTargets, required this.engineRevision});
 
@@ -1561,14 +1537,9 @@ class WebTemplatedFiles extends Target {
               .map((Dart2WebTarget target) => target.getBuildConfig(environment))
               .toList()
         : buildDescriptions;
-    final String? localCanvasKitBaseUrl = _localCanvasKitBaseUrl(
-      environment,
-      webContentHash:
-          compileTargets?.any((Dart2WebTarget t) => t.compilerConfig.webContentHash) ?? false,
-    );
     final buildConfig = <String, Object>{
       'engineRevision': engineRevision,
-      'localCanvasKitBaseUrl': ?localCanvasKitBaseUrl,
+      'localCanvasKitBaseUrl': ?environment.defines[kLocalCanvasKitBaseUrl],
       'wasmHashes': _computeWasmHashes(environment),
       'builds': descriptions,
       if (environment.defines[kUseLocalCanvasKitFlag] == 'true') 'useLocalCanvasKit': true,
@@ -1723,11 +1694,10 @@ $supportsDart2WasmLine''';
 /// These assets can be cached until a new version of the flutter web sdk is
 /// downloaded.
 class WebBuiltInAssets extends Target {
-  const WebBuiltInAssets(this.fileSystem, this.artifacts, {this.webContentHash = false});
+  const WebBuiltInAssets(this.fileSystem, this.artifacts);
 
   final FileSystem fileSystem;
   final Artifacts artifacts;
-  final bool webContentHash;
 
   @override
   String get name => 'web_static_assets';
@@ -1756,8 +1726,7 @@ class WebBuiltInAssets extends Target {
     const Source.pattern('{BUILD_DIR}/flutter.js'),
     const Source.pattern('{BUILD_DIR}/flutter.js.map'),
     Source.fromEnvironment((Environment environment) {
-      final String baseUrl =
-          _localCanvasKitBaseUrl(environment, webContentHash: webContentHash) ?? 'canvaskit';
+      final String baseUrl = environment.defines[kLocalCanvasKitBaseUrl] ?? 'canvaskit';
       return <Source>[
         for (final File file in _canvasKitFiles)
           Source.pattern('{OUTPUT_DIR}/$baseUrl/${_filePathRelativeToCanvasKitDirectory(file)}'),
@@ -1767,8 +1736,7 @@ class WebBuiltInAssets extends Target {
 
   @override
   Future<void> build(Environment environment) async {
-    final String baseUrl =
-        _localCanvasKitBaseUrl(environment, webContentHash: webContentHash) ?? 'canvaskit';
+    final String baseUrl = environment.defines[kLocalCanvasKitBaseUrl] ?? 'canvaskit';
     for (final File file in _canvasKitFiles) {
       final String relativePath = _filePathRelativeToCanvasKitDirectory(file);
       final File targetFile = fileSystem.file(
@@ -1822,11 +1790,7 @@ class WebServiceWorker extends Target {
   @override
   List<Target> get dependencies => <Target>[
     WebReleaseBundle(compileConfigs, analytics, engineRevision: engineRevision),
-    WebBuiltInAssets(
-      fileSystem,
-      artifacts,
-      webContentHash: compileConfigs.any((WebCompilerConfig config) => config.webContentHash),
-    ),
+    WebBuiltInAssets(fileSystem, artifacts),
   ];
 
   @override
@@ -1861,7 +1825,7 @@ class WebServiceWorker extends Target {
       outputDir,
       enabled: webContentHash,
       useLocalCanvasKit: environment.defines[kUseLocalCanvasKitFlag] == 'true',
-      localCanvasKitBaseUrl: _localCanvasKitBaseUrl(environment, webContentHash: webContentHash),
+      localCanvasKitBaseUrl: environment.defines[kLocalCanvasKitBaseUrl],
     );
     final File userServiceWorker = environment.resolvedProjectDir
         .childDirectory('web')
