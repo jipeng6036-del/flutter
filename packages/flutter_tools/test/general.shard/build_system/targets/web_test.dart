@@ -1827,6 +1827,71 @@ _flutter.loader.load();
     expect(canvasKitOutputAfter.readAsStringSync(), 'bar');
   });
 
+  test('Uses the same CanvasKit content hash in output paths, bootstrap and manifest', () async {
+    environment.defines[kUseLocalCanvasKitFlag] = 'true';
+    final Directory sdk = fs
+        .directory(environment.artifacts.getHostArtifact(HostArtifact.flutterWebSdk))
+        .childDirectory('canvaskit');
+    final File wasm = sdk.childFile('canvaskit.wasm')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('first renderer bytes');
+    sdk.childFile('canvaskit.js').writeAsStringSync('loader');
+    final target = WebBuiltInAssets(fs, environment.artifacts, webContentHash: true);
+    final templatedFiles = WebTemplatedFiles(
+      const <Map<String, Object?>>[],
+      compileTargets: <Dart2WebTarget>[
+        Dart2JSTarget(
+          const JsCompilerConfig(webContentHash: true),
+          engineRevision: _kEngineRevision,
+        ),
+      ],
+      engineRevision: _kEngineRevision,
+    );
+    environment.buildDir.childFile('main.dart.01234567.js').createSync();
+
+    await target.build(environment);
+    final File output = target
+        .resolveOutputs(environment)
+        .sources
+        .singleWhere((File file) => file.basename == 'canvaskit.wasm');
+    final base = 'canvaskit/${output.parent.basename}';
+    expect(output.readAsStringSync(), 'first renderer bytes');
+    expect(
+      templatedFiles.buildConfigString(environment),
+      contains('"localCanvasKitBaseUrl":"$base"'),
+    );
+    environment.outputDir.childDirectory('canvaskit').childFile('canvaskit.wasm')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('stale renderer bytes');
+    final File manifest = updatePrecacheManifest(
+      environment.outputDir,
+      enabled: true,
+      useLocalCanvasKit: true,
+      localCanvasKitBaseUrl: base,
+    )!;
+    final decoded = jsonDecode(manifest.readAsStringSync()) as Map<String, Object?>;
+    final List<Map<String, Object?>> entries = (decoded['entries']! as List<Object?>)
+        .cast<Map<String, Object?>>();
+    expect(entries.where((entry) => (entry['url']! as String).startsWith('$base/')), hasLength(2));
+    expect(
+      entries.singleWhere((entry) => entry['url'] == 'canvaskit/canvaskit.wasm')['urlHashed'],
+      isFalse,
+    );
+    expect(
+      entries.singleWhere((entry) => entry['url'] == '$base/canvaskit.wasm')['urlHashed'],
+      isTrue,
+    );
+
+    wasm.writeAsStringSync('updated renderer bytes');
+    await target.build(environment);
+    final File updatedOutput = target
+        .resolveOutputs(environment)
+        .sources
+        .singleWhere((File file) => file.basename == 'canvaskit.wasm');
+    expect(updatedOutput.path, isNot(output.path));
+    expect(updatedOutput.readAsStringSync(), 'updated renderer bytes');
+  });
+
   test('Dart2JSTarget getBuildConfig dynamically discovers hashed output', () {
     environment.buildDir.childFile('main.dart.01234567.js').createSync();
     final target = Dart2JSTarget(

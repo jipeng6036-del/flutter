@@ -499,6 +499,7 @@ File? updatePrecacheManifest(
   Directory outputDir, {
   required bool enabled,
   required bool useLocalCanvasKit,
+  String? localCanvasKitBaseUrl,
 }) {
   final File manifestFile = outputDir.childFile(kPrecacheManifestFile);
   if (!enabled) {
@@ -533,7 +534,10 @@ File? updatePrecacheManifest(
 
     final Uint8List bytes = file.readAsBytesSync();
     final String shortHash = computeShortContentHash(bytes);
-    final bool urlHashed = basename.contains('.$shortHash.') || basename.endsWith('.$shortHash');
+    final bool urlHashed =
+        basename.contains('.$shortHash.') ||
+        basename.endsWith('.$shortHash') ||
+        (localCanvasKitBaseUrl != null && posixUrl.startsWith('$localCanvasKitBaseUrl/'));
 
     entries.add(<String, Object>{
       'url': posixUrl,

@@ -51,5 +51,5 @@ export function getCanvaskitBaseUrl(config, buildConfig) {
   if (buildConfig.engineRevision && !buildConfig.useLocalCanvasKit) {
     return joinPathSegments("https://www.gstatic.com/flutter-canvaskit", buildConfig.engineRevision);
   }
-  return "canvaskit";
+  return buildConfig.localCanvasKitBaseUrl || "canvaskit";
 }

@@ -29,6 +29,7 @@ export type ApplicationBuild = JSApplicationBuild | WasmApplicationBuild;
 export interface BuildConfig {
   engineRevision: string;
   useLocalCanvasKit?: boolean;
+  localCanvasKitBaseUrl?: string;
   builds: ApplicationBuild[];
   wasmHashes?: { [key: string]: string };
 }

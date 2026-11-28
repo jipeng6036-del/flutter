@@ -220,11 +220,14 @@ class BuildWebCommand extends BuildSubCommand {
       webDefines: webDefines,
     );
     if (webContentHash) {
+      final rendererCachingTip = buildInfo.useLocalCanvasKit
+          ? 'Files under "canvaskit/<hash>/" can also be served with immutable caching. Other files should use revalidation.'
+          : 'Other files, including everything under "canvaskit/", are not content-hashed and should not be served with "immutable" caching.';
       logger.printStatus(
         '\nServing tip: Configure your web host to serve "index.html" and "flutter_bootstrap.js"\n'
         'with "Cache-Control: no-cache" (or revalidation) so browser clients immediately pick up new deployments.\n'
         'Hashed files ("main.dart.<hash>.*" and everything under "assets/") can be served with long-term immutable caching (e.g. "Cache-Control: max-age=31536000, immutable").\n'
-        'Other files, including everything under "canvaskit/", are not content-hashed and should not be served with "immutable" caching.\n'
+        '$rendererCachingTip\n'
         'See https://docs.flutter.dev/deployment/web#web-content-hashing for caching guidance.',
       );
     }
